@@ -1,107 +1,76 @@
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
+# Camlock Roblox System - PlayStation Style
+metadata:
+  name: "PS_Camlock_System"
+  version: "1.0.0"
+  author: "Developer"
+  description: "Camlock system for Players and NPCs with PS Controller support"
 
-local player = Players.LocalPlayer
-local camera = workspace.CurrentCamera
+configuration:
+  keys:
+    keyboard: "C"
+    gamepad: "ButtonL2"
+  combat:
+    max_distance: 100
+    smoothness: 0.15
+    auto_unlock_on_death: true
+  visuals:
+    crosshair_id: "rbxassetid://6031068433"
+    crosshair_color: [255, 0, 0]
+    rotation_speed: 4
 
-local isLocked = false
-local currentTarget = nil
-local maxLockDistance = 100
+# Source code diletakkan dalam block scalar agar tetap terbaca sebagai Lua
+script_source: |
+  local Players = game:GetService("Players")
+  local UserInputService = game:GetService("UserInputService")
+  local RunService = game:GetService("RunService")
 
--- Input Settings
-local keyboardKey = Enum.KeyCode.C
-local gamepadKey = Enum.KeyCode.ButtonL2
+  local player = Players.LocalPlayer
+  local camera = workspace.CurrentCamera
+  local isLocked, currentTarget = false, nil
 
--- UI Crosshair Setup
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "CamlockGui"
-screenGui.Parent = player:WaitForChild("PlayerGui")
+  -- GUI Setup
+  local screenGui = Instance.new("ScreenGui", player.PlayerGui)
+  local crosshair = Instance.new("ImageLabel", screenGui)
+  crosshair.Size = UDim2.new(0, 50, 0, 50)
+  crosshair.BackgroundTransparency = 1
+  crosshair.Image = "rbxassetid://6031068433"
+  crosshair.ImageColor3 = Color3.fromRGB(255, 0, 0)
+  crosshair.AnchorPoint = Vector2.new(0.5, 0.5)
+  crosshair.Visible = false
 
-local crosshair = Instance.new("ImageLabel")
-crosshair.Name = "LockIcon"
-crosshair.Size = UDim2.new(0, 50, 0, 50)
-crosshair.BackgroundTransparency = 1
-crosshair.Image = "rbxassetid://6031068433" -- Icon target default (bisa diganti)
-crosshair.ImageColor3 = Color3.fromRGB(255, 0, 0)
-crosshair.AnchorPoint = Vector2.new(0.5, 0.5)
-crosshair.Visible = false
-crosshair.Parent = screenGui
+  local function getNearestTarget()
+      local nearestDist, nearestChar = 100, nil
+      for _, obj in pairs(workspace:GetDescendants()) do
+          if obj:IsA("Humanoid") and obj.Parent ~= player.Character and obj.Health > 0 then
+              local root = obj.Parent:FindFirstChild("HumanoidRootPart")
+              if root then
+                  local dist = (player.Character.HumanoidRootPart.Position - root.Position).Magnitude
+                  if dist < nearestDist then
+                      nearestDist = dist
+                      nearestChar = obj.Parent
+                  end
+              end
+          end
+      end
+      return nearestChar
+  end
 
--- Fungsi mencari target (Pemain atau NPC)
-local function getNearestTarget()
-	local nearestDistance = maxLockDistance
-	local nearestChar = nil
-	local character = player.Character
-	if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
+  UserInputService.InputBegan:Connect(function(input, gpe)
+      if gpe then return end
+      if input.KeyCode == Enum.KeyCode.C or input.KeyCode == Enum.KeyCode.ButtonL2 then
+          isLocked = not isLocked
+          currentTarget = isLocked and getNearestTarget() or nil
+      end
+  end)
 
-	local myPos = character.HumanoidRootPart.Position
-
-	-- Scan semua objek di workspace
-	for _, obj in pairs(workspace:GetDescendants()) do
-		if obj:IsA("Humanoid") and obj.Parent ~= character and obj.Health > 0 then
-			local rootPart = obj.Parent:FindFirstChild("HumanoidRootPart")
-			if rootPart then
-				local distance = (myPos - rootPart.Position).Magnitude
-				if distance < nearestDistance then
-					nearestDistance = distance
-					nearestChar = obj.Parent
-				end
-			end
-		end
-	end
-	return nearestChar
-end
-
--- Input Listener
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	
-	if input.KeyCode == keyboardKey or input.KeyCode == gamepadKey then
-		if isLocked then
-			isLocked = false
-			currentTarget = nil
-			crosshair.Visible = false
-		else
-			currentTarget = getNearestTarget()
-			if currentTarget then
-				isLocked = true
-				crosshair.Visible = true
-			end
-		end
-	end
-end)
-
--- Loop Utama (Update Kamera & UI)
-RunService:BindToRenderStep("PS_Camlock_Enhanced", Enum.RenderPriority.Camera.Value + 1, function()
-	if isLocked and currentTarget and currentTarget:FindFirstChild("HumanoidRootPart") and currentTarget:FindFirstChild("Humanoid").Health > 0 then
-		local targetPart = currentTarget.HumanoidRootPart
-		local targetPos = targetPart.Position
-		
-		-- 1. Update Kamera
-		local goalCFrame = CFrame.new(camera.CFrame.Position, targetPos)
-		camera.CFrame = camera.CFrame:Lerp(goalCFrame, 0.15)
-		
-		-- 2. Update Posisi Crosshair di Layar (WorldToScreenPoint)
-		local screenPos, onScreen = camera:WorldToScreenPoint(targetPos)
-		if onScreen then
-			crosshair.Visible = true
-			crosshair.Position = UDim2.new(0, screenPos.X, 0, screenPos.Y)
-			crosshair.Rotation = crosshair.Rotation + 2 -- Animasi putar biar keren
-		else
-			crosshair.Visible = false
-		end
-		
-		-- Cek Jarak (Auto unlock jika terlalu jauh)
-		if (player.Character.HumanoidRootPart.Position - targetPos).Magnitude > maxLockDistance then
-			isLocked = false
-			currentTarget = nil
-			crosshair.Visible = false
-		end
-	else
-		isLocked = false
-		currentTarget = nil
-		crosshair.Visible = false
-	end
-end)
+  RunService:BindToRenderStep("PS_Camlock", 201, function()
+      if isLocked and currentTarget and currentTarget:FindFirstChild("HumanoidRootPart") then
+          local root = currentTarget.HumanoidRootPart
+          camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, root.Position), 0.15)
+          local pos, onScreen = camera:WorldToScreenPoint(root.Position)
+          if onScreen then
+              crosshair.Visible, crosshair.Position = true, UDim2.new(0, pos.X, 0, pos.Y)
+              crosshair.Rotation += 4
+          else crosshair.Visible = false end
+      else isLocked, crosshair.Visible = false, false end
+  end)
